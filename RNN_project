@@ -1,0 +1,1739 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Artificial Intelligence Nanodegree\n",
+    "## Recurrent Neural Network Projects\n",
+    "\n",
+    "Welcome to the Recurrent Neural Network Project in the Artificial Intelligence Nanodegree! In this notebook, some template code has already been provided for you, and you will need to implement additional functionality to successfully complete this project. You will not need to modify the included code beyond what is requested. Sections that begin with **'Implementation'** in the header indicate that the following block of code will require additional functionality which you must provide. Instructions will be provided for each section and the specifics of the implementation are marked in the code block with a 'TODO' statement. Please be sure to read the instructions carefully!\n",
+    "\n",
+    "In addition to implementing code, there will be questions that you must answer which relate to the project and your implementation. Each section where you will answer a question is preceded by a **'Question X'** header. Carefully read each question and provide thorough answers in the following text boxes that begin with **'Answer:'**. Your project submission will be evaluated based on your answers to each of the questions and the implementation you provide.  \n",
+    "\n",
+    ">**Note:** Code and Markdown cells can be executed using the **Shift + Enter** keyboard shortcut. In addition, Markdown cells can be edited by typically double-clicking the cell to enter edit mode."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Implementation TODOs in this notebook\n",
+    "\n",
+    "This notebook contains two problems, cut into a variety of TODOs.  Make sure to complete each section containing a TODO marker throughout the notebook.  For convinence we provide links to each of these sections below.\n",
+    "\n",
+    "[TODO #1: Implement a function to window time series](#TODO_1)\n",
+    "\n",
+    "[TODO #2: Create a simple RNN model using keras to perform regression](#TODO_2)\n",
+    "\n",
+    "[TODO #3: Finish cleaning a large text corpus](#TODO_3)\n",
+    "\n",
+    "[TODO #4: Implement a function to window a large text corpus](#TODO_4)\n",
+    "\n",
+    "[TODO #5: Create a simple RNN model using keras to perform multiclass classification](#TODO_5)\n",
+    "\n",
+    "[TODO #6: Generate text using a fully trained RNN model and a variety of input sequences](#TODO_6)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Problem 1: Perform time series prediction \n",
+    "\n",
+    "In this project you will perform time series prediction using a Recurrent Neural Network regressor.  In particular you will re-create the figure shown in the notes - where the stock price of Apple was forecasted (or predicted) 7 days in advance.  In completing this exercise you will learn how to construct RNNs using Keras, which will also aid in completing the second project in this notebook.\n",
+    "\n",
+    "The particular network architecture we will employ for our RNN is known as  [Long Term Short Memory (LTSM)](https://en.wikipedia.org/wiki/Long_short-term_memory), which helps significantly avoid technical problems with optimization of RNNs.  "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1.1 Getting started\n",
+    "\n",
+    "First we must load in our time series - a history of around 140 days of Apple's stock price.  Then we need to perform a number of pre-processing steps to prepare it for use with an RNN model.  First off, it is good practice to normalize time series - by normalizing its range.  This helps us avoid serious numerical issues associated how common activation functions (like tanh) transform very large (positive or negative) numbers, as well as helping us to avoid related issues when computing derivatives.\n",
+    "\n",
+    "Here we normalize the series to lie in the range [0,1] [using this scikit function](http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html), but it is also commonplace to normalize by a series standard deviation."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [],
+   "source": [
+    "### Load in necessary libraries for data input and normalization\n",
+    "%matplotlib inline\n",
+    "import numpy as np\n",
+    "import matplotlib.pyplot as plt\n",
+    "\n",
+    "### load in and normalize the dataset\n",
+    "dataset = np.loadtxt('datasets/normalized_apple_prices.csv')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Lets take a quick look at the (normalized) time series we'll be performing predictions on."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "<matplotlib.text.Text at 0x24cae6e0908>"
+      ]
+     },
+     "execution_count": 2,
+     "metadata": {},
+     "output_type": "execute_result"
+    },
+    {
+     "data": {
+      "image/png": "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\n",
+      "text/plain": [
+       "<matplotlib.figure.Figure at 0x24cad2b6cf8>"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "# lets take a look at our time series\n",
+    "plt.plot(dataset)\n",
+    "plt.xlabel('time period')\n",
+    "plt.ylabel('normalized series value')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1.2  Cutting our time series into sequences\n",
+    "\n",
+    "Remember, our time series is a sequence of numbers that we can represent in general mathematically as \n",
+    "\n",
+    "$$s_{0},s_{1},s_{2},...,s_{P}$$\n",
+    "\n",
+    "where $s_{p}$ is the numerical value of the time series at time period $p$ and where $P$ is the total length of the series.  In order to apply our RNN we treat the time series prediction problem as a regression problem, and so need to use a sliding window to construct a set of associated input/output pairs to regress on.  This process is animated in the gif below.\n",
+    "\n",
+    "<img src=\"images/timeseries_windowing_training.gif\" width=600 height=600/>\n",
+    "\n",
+    "For example - using a window of size T = 5 (as illustrated in the gif above) we produce a set of input/output pairs like the one shown in the table below\n",
+    "\n",
+    "$$\\begin{array}{c|c}\n",
+    "\\text{Input} & \\text{Output}\\\\\n",
+    "\\hline \\color{CornflowerBlue} {\\langle s_{1},s_{2},s_{3},s_{4},s_{5}\\rangle} & \\color{Goldenrod}{ s_{6}} \\\\\n",
+    "\\ \\color{CornflowerBlue} {\\langle s_{2},s_{3},s_{4},s_{5},s_{6} \\rangle } & \\color{Goldenrod} {s_{7} } \\\\\n",
+    "\\color{CornflowerBlue}  {\\vdots} & \\color{Goldenrod} {\\vdots}\\\\\n",
+    "\\color{CornflowerBlue} { \\langle s_{P-5},s_{P-4},s_{P-3},s_{P-2},s_{P-1} \\rangle } & \\color{Goldenrod} {s_{P}}\n",
+    "\\end{array}$$\n",
+    "\n",
+    "Notice here that each input is a sequence (or vector) of length 4 (and in general has length equal to the window size T) while each corresponding output is a scalar value.  Notice also how given a time series of length P and window size T = 5 as shown above, we created P - 5  input/output pairs.  More generally, for a window size T we create P - T such pairs."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Now its time for you to window the input time series as described above!  \n",
+    "\n",
+    "<a id='TODO_1'></a>\n",
+    "\n",
+    "**TODO:** Fill in the function below - called **window_transform_series** - that runs a sliding window along the input series and creates associated input/output pairs.    Note that this function should input a) the series and b) the window length, and return the input/output subsequences.  Make sure to format returned input/output as generally shown in table above (where window_size = 5), and make sure your returned input is a numpy array.\n",
+    "\n",
+    "-----"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "You can test your function on the list of odd numbers given below"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {
+    "collapsed": true
+   },
+   "outputs": [],
+   "source": [
+    "odd_nums = np.array([1,3,5,7,9,11,13])"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "To window this sequence with a window_size = 2 using the **window_transform_series** you should get the following input/output pairs"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {
+    "collapsed": true
+   },
+   "outputs": [],
+   "source": [
+    "### TODO: fill out the function below that transforms the input series and window-size into a set of input/output pairs for use with our RNN model\n",
+    "def window_transform_series(series,window_size):\n",
+    "    # containers for input/output pairs\n",
+    "    X = []\n",
+    "    y = []\n",
+    "    \n",
+    "    # get last item in list\n",
+    "    last_place = len(series)-window_size-1 # -1 as last item will only be on y\n",
+    "    \n",
+    "    for i in range(last_place):\n",
+    "        x = series[i:(i+window_size)] # get all item in window_size\n",
+    "        X.append(x)\n",
+    "        y.append(series[i + window_size]) # get last item after window_size\n",
+    "    \n",
+    "        \n",
+    "    # reshape each \n",
+    "    X = np.asarray(X)\n",
+    "    X.shape = (np.shape(X)[0:2])\n",
+    "    y = np.asarray(y)\n",
+    "    y.shape = (len(y),1)\n",
+    "    \n",
+    "    return X,y"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "--- the input X will look like ----\n",
+      "[[1 3]\n",
+      " [3 5]\n",
+      " [5 7]\n",
+      " [7 9]]\n",
+      "--- the associated output y will look like ----\n",
+      "[[ 5]\n",
+      " [ 7]\n",
+      " [ 9]\n",
+      " [11]]\n",
+      "the shape of X is (4, 2)\n",
+      "the shape of y is (4, 1)\n",
+      "the type of X is <class 'numpy.ndarray'>\n",
+      "the type of y is <class 'numpy.ndarray'>\n"
+     ]
+    }
+   ],
+   "source": [
+    "# run a window of size 2 over the odd number sequence and display the results\n",
+    "window_size = 2\n",
+    "X,y = window_transform_series(odd_nums,window_size)\n",
+    "\n",
+    "# print out input/output pairs --> here input = X, corresponding output = y\n",
+    "print ('--- the input X will look like ----')\n",
+    "print (X)\n",
+    "\n",
+    "print ('--- the associated output y will look like ----')\n",
+    "print (y)\n",
+    "\n",
+    "print ('the shape of X is ' + str(np.shape(X)))\n",
+    "print ('the shape of y is ' + str(np.shape(y)))\n",
+    "print('the type of X is ' + str(type(X)))\n",
+    "print('the type of y is ' + str(type(y)))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Again - you can check that your completed **window_transform_series** function works correctly by trying it on the odd_nums sequence - you should get the above output.  \n",
+    "\n",
+    "(remember to copy your completed function into the script *my_answers.py* function titled *window_transform_series* before submitting your project)\n",
+    "\n",
+    "-----"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "With this function in place apply it to the series in the Python cell below.  We use a window_size = 7 for these experiments."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [],
+   "source": [
+    "# window the data using your windowing function\n",
+    "window_size = 7\n",
+    "X,y = window_transform_series(series = dataset,window_size = window_size)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1.3  Splitting into training and testing sets\n",
+    "\n",
+    "In order to perform proper testing on our dataset we will lop off the last 1/3 of it for validation (or testing).  This is that once we train our model we have something to test it on (like any regression problem!).  This splitting into training/testing sets is done in the cell below.\n",
+    "\n",
+    "Note how here we are **not** splitting the dataset *randomly* as one typically would do when validating a regression model.  This is because our input/output pairs *are related temporally*.   We don't want to validate our model by training on a random subset of the series and then testing on another random subset, as this simulates the scenario that we receive new points *within the timeframe of our training set*.  \n",
+    "\n",
+    "We want to train on one solid chunk of the series (in our case, the first full 2/3 of it), and validate on a later chunk (the last 1/3) as this simulates how we would predict *future* values of a time series."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [],
+   "source": [
+    "# split our dataset into training / testing sets\n",
+    "train_test_split = int(np.ceil(2*len(y)/float(3)))   # set the split point\n",
+    "\n",
+    "# partition the training set\n",
+    "X_train = X[:train_test_split,:]\n",
+    "y_train = y[:train_test_split]\n",
+    "\n",
+    "# keep the last chunk for testing\n",
+    "X_test = X[train_test_split:,:]\n",
+    "y_test = y[train_test_split:]\n",
+    "\n",
+    "# NOTE: to use keras's RNN LSTM module our input must be reshaped to [samples, window size, stepsize] \n",
+    "X_train = np.asarray(np.reshape(X_train, (X_train.shape[0], window_size, 1)))\n",
+    "X_test = np.asarray(np.reshape(X_test, (X_test.shape[0], window_size, 1)))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "<a id='TODO_2'></a>\n",
+    "\n",
+    "## 1.4  Build and run an RNN regression model\n",
+    "\n",
+    "Having created input/output pairs out of our time series and cut this into training/testing sets, we can now begin setting up our RNN.  We use Keras to quickly build a two hidden layer RNN of the following specifications\n",
+    "\n",
+    "- layer 1 uses an LSTM module with 5 hidden units (note here the input_shape = (window_size,1))\n",
+    "- layer 2 uses a fully connected module with one unit\n",
+    "- the 'mean_squared_error' loss should be used (remember: we are performing regression here)\n",
+    "\n",
+    "This can be constructed using just a few lines - see e.g., the [general Keras documentation](https://keras.io/getting-started/sequential-model-guide/) and the [LTSM documentation in particular](https://keras.io/layers/recurrent/) for examples of how to quickly use Keras to build neural network models.  Make sure you are initializing your optimizer given the [keras-recommended approach for RNNs](https://keras.io/optimizers/) \n",
+    "\n",
+    "(given in the cell below).  (remember to copy your completed function into the script *my_answers.py* function titled *build_part1_RNN* before submitting your project)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Using TensorFlow backend.\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "_________________________________________________________________\n",
+      "Layer (type)                 Output Shape              Param #   \n",
+      "=================================================================\n",
+      "Total params: 0\n",
+      "Trainable params: 0\n",
+      "Non-trainable params: 0\n",
+      "_________________________________________________________________\n",
+      "_________________________________________________________________\n",
+      "Layer (type)                 Output Shape              Param #   \n",
+      "=================================================================\n",
+      "lstm_1 (LSTM)                (None, 7)                 252       \n",
+      "_________________________________________________________________\n",
+      "dense_1 (Dense)              (None, 1)                 8         \n",
+      "=================================================================\n",
+      "Total params: 260\n",
+      "Trainable params: 260\n",
+      "Non-trainable params: 0\n",
+      "_________________________________________________________________\n"
+     ]
+    }
+   ],
+   "source": [
+    "### TODO: create required RNN model\n",
+    "# import keras network libraries\n",
+    "from keras.models import Sequential\n",
+    "from keras.layers import Dense\n",
+    "from keras.layers import LSTM\n",
+    "import keras\n",
+    "\n",
+    "# given - fix random seed - so we can all reproduce the same results on our default time series\n",
+    "np.random.seed(0)\n",
+    "\n",
+    "\n",
+    "# TODO: build an RNN to perform regression on our time series input/output data\n",
+    "model = Sequential()\n",
+    "model.summary()\n",
+    "model.add(LSTM(7, input_shape=(window_size,1)))\n",
+    "model.add(Dense(1))\n",
+    "model.summary()\n",
+    "\n",
+    "# build model using keras documentation recommended optimizer initialization\n",
+    "optimizer = keras.optimizers.RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)\n",
+    "\n",
+    "# compile the model\n",
+    "model.compile(loss='mean_squared_error', optimizer=optimizer)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "With your model built you can now fit the model by activating the cell below!  Note: the number of epochs (np_epochs) and batch_size are preset (so we can all produce the same results).  You can choose to toggle the verbose parameter - which gives you regular updates on the progress of the algorithm - on and off by setting it to 1 or 0 respectively."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "<keras.callbacks.History at 0x24cae665d68>"
+      ]
+     },
+     "execution_count": 9,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# run your model!\n",
+    "model.fit(X_train, y_train, epochs=1000, batch_size=50, verbose=0)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1.5  Checking model performance\n",
+    "\n",
+    "With your model fit we can now make predictions on both our training and testing sets."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {
+    "collapsed": true
+   },
+   "outputs": [],
+   "source": [
+    "# generate predictions for training\n",
+    "train_predict = model.predict(X_train)\n",
+    "test_predict = model.predict(X_test)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "In the next cell we compute training and testing errors using our trained model - you should be able to achieve at least\n",
+    "\n",
+    "*training_error* < 0.02\n",
+    "\n",
+    "and \n",
+    "\n",
+    "*testing_error* < 0.02\n",
+    "\n",
+    "with your fully trained model.  \n",
+    "\n",
+    "If either or both of your accuracies are larger than 0.02 re-train your model - increasing the number of epochs you take (a maximum of around 1,000 should do the job) and/or adjusting your batch_size."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "training error = 0.0157757817671\n",
+      "testing error = 0.0143749778657\n"
+     ]
+    }
+   ],
+   "source": [
+    "# print out training and testing errors\n",
+    "training_error = model.evaluate(X_train, y_train, verbose=0)\n",
+    "print('training error = ' + str(training_error))\n",
+    "\n",
+    "testing_error = model.evaluate(X_test, y_test, verbose=0)\n",
+    "print('testing error = ' + str(testing_error))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Activating the next cell plots the original data, as well as both predictions on the training and testing sets. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "data": {
+      "image/png": "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\nJx999BFDhgwBYOjQoTRp0oQpU6bkJdrnnXceycnJBOX7YTR8+HBatmzJxIkTmTx5cpGey+V///sf\nbdu2PW0GO78nnngCay2rV6+mdu3aANxzzz0MGTKEZ555hhEjRlC1atW84zMyMli1atU5S0Xuu+8+\n+vbty3//+9+8sREjRhAbG8vf/vY3Zs2alRfj8OHDeeWVV/KO+7//+79ivc6zKeqP9WTgQWPMHJwO\nHpcYY/YXdqC11qe9Vay1n+b2zB6LUzKyGuhvrd2de0gDICrfKcE4fbfPx2kDuBbo6+s4pXhWrICb\nbsrm0KF/07DhXj7/HPr1g3r1+vHYY4+xdOlSevfuTXg4VK0K27f7O2LPrV+/Hji1Qc3MmZCVBXff\n7b+YunW7CFjMrFmtGD/ef3GIiBS0cePGUpkhj4+PL/Gn2Dk5OcydO5frr78+L8kGaNCgAUOGDOHd\nd9/lyJEjhIWFAc4s7PDhw8/ZMWPevHlkZ2dz3333uY2PGjWqyIl2WFhYXpINUKVKFS6++GK2bNmS\nN2aMyUuyrbUcOHCA7OxsOnfuzKpVq4r0PPnVrl2b1NRUVq5cmTeDXNCXX37JLbfcQnZ2Nnv37s0b\n79evH5988gmrVq3ikktONZa78847z5lkr169mqSkJJ588km3a1pr6du3L1OnTnWLcdmyZezcuZOG\nDRsW+zWeS1ET7THA28DjOJu/zDzDcRanK4hPWWv/hbNZTmGP3VXg/qvAq4UdK2WDtU5tsjHHgb78\n97/Tad7caZ7dvn176tWrx9y5c+nduzfGOOUjqan+jbkkEhISiIqKombNmgAsXuwsgCzNln4F1ahR\ng6ioJDZt6klmJuSWjouI+F2rVq2Ij48vlecpqd27d3Ps2DFiYmJOe6x169bk5OSwfft2WrdunTce\nHR19zuumpKQA0KKF+/KyOnXqUKdO0TbnjnTVXhY4/9dff3Ub+/DDD3n99dfZuHEjmZmnmsk1a9as\nSM+T31/+8hfmzZvHxRdfTIsWLejXrx9Dhgzh0kudLsu7d+/mwIEDvPPOO0yaNOm0840xpKe7F1AU\n5f1Kyt1w4/bbby/08YCAAA4ePEitWrV45ZVXuPPOO4mKiqJTp05ceeWV3H777TRt2rSYr7ZwRUq0\nrbVfAV8ZY8KAQ0BL/Fc6IhXM99/Dzz/D0KGz+fTTDW7/uAMCAoiLi3PrPFJeEu3Vq2HSJHj9dQjJ\n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\nlSo888wzrFixgj59+vDmm28yZswY/vznP9OiRQuvzkJ78v6VZR7t4WmtXW2t/ZO1to21trO1dqi1\nNsnbwUnFcPToUY4dO1aiXSFdRo0axfLly0/7T11wRvvIEafzSEEnTpxg+/btfP755yQlOf9k169f\nT4sWLahatSr798O2bXDhhYaff/6Z//u///Ms0AomLCyMRo0a5SXaq1c7LRRdtm/fjrXWLdHesqUG\ncJyQkFTASbRVOiLlXWZmJgcPHoTMTPjnPyE0FP7xD9i3z9+heZ21lrS0NCXaxdS5c2fGjRvH2rVr\nueuuuxgyZAi7c7/5GWMKTUr79OnDe++9R1paGqNHj+aTTz7hlVde4bpC+sgWdo0zJbqFjXt67v33\n388bb7zB9u3bGTNmDD/++CPffPMNtWrVolq1aoVeo6jx5B8/2/tXLllrz3kDaub/+my3olyvrN+A\njoCNj4+3UnK//fabBez3339vp02zFqw9fNi7z/Haa6/ZkJAQm5OTY7dscZ7ju+9OPy4xMdEC1hhj\n77nnHmuttX379rWDBg2y1lq7YIFz7q+/eje+iuCyyy6zN954o50923mPEhNPPTZ37lwL2M2bN+eN\n3XmntcastH//+9+ttdYOHWptly6lHbWIdz3++OM2KirKZn78sfMfYc4ca0NCrH3ySX+H5nX79u2z\ngP3ss8+KdV58fLwFLNDR6udshZaTk2PDw8Pzfp5WFkX5N+66FXVGe78xJiL36wPA/kJurnERN65d\nISMiIjzeFfJcmjRpwvHjx9mzZw9NmjiLZwqr03bNeg8bNowPPviAnTt3urX2W7PG2bmwkBanlV5M\nTEzejDa412knJydjjHFrEbV2LYSEJObV2al0RMq7nJwcPvroI7Zv386BZ5+F3r2d3Zjuv98pIalg\ns9q7du0C0Iy2ALi1HHT58MMP2bdvn1/bP5Z1RU20LwNc30H65N4veHONi7gpuP26pwshzyZ/i7+z\ndR5x9QJ94YUXqFatGk899RS7du1yS7TbtIEqVbwfY3kXExNDUlIS4eE5NGp0eqIdGRlJcO7+6llZ\nzi86NWpszVsoo9IRKe+WLl1Kamoq/cPDqZuYCA895DwwZozzj37CBP8G6GWuRNu1B4JUbj///DMd\nO3bkxRdf5J133mHEiBEMHz6cuLg4brzxRn+HV2YVqb2ftXYhgDEmCOgFvGetTfVlYFJxpKWlERAQ\n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\nNpbWrVtX+vXOPPNMkpOTS5WPJCdDly7ll48cOHCAO++8k5tvvpkOHTpw0UWfcdNNMHu2Xw3Pz4en\nnx5Kt25D2by5KQUFSrRF6oouXbrQs2fPSIchIiIREBfpAE4FcXFxDBo0qNxEOy8vj7Zt2xIbG1ul\n1xw5ciQzZ87EOYeZlZSPTJkCL7/sa6yDVq5cyffff89f//pXMjOzmDy5I82avcz69bcSHx/PV19B\nly5F7Nz5OnPm+BrQQYNO9qpFpCZMmzbN968WEZGooxXtSkpLS2PJkiU450odL9var7JGjhzJ119/\nzdq1a0uOXXst7NoFH31UemxmZibx8fGMGTOGG254Fudas3fvLN58800AWrQopLh4BIcPt+KZZ/xN\nkPHxVb9GEal5ffr0oXPnzpEOQ0REIkCJdiWlpaXxn//8hy1btpQ6XnazmsoaMmQICQkJpcpH+vWD\nrl1h1qzSYzMzM+nbty/x8fGkp/ubHK+4ohVPP/00xcXFLF++nCNH1vLqq1/SpAlcdVW1LlFERERE\napAS7Uq64IILAI4pH6nuinbDhg258MILSyXaZn5V++234fDho2OXLVvGgAEDAEhP99uqP/roeDZs\n2MDbb79NRkYGjRo1YuzYzmzfDnfcUfXrExEREZGapUS7ks444wySkpJqLNEGGDFiBIsWLeJwSFZ9\n3XW++0hw85rdu3ezYcMGBg4cSGEhfPopXHopDBw4kBEjRvDUU0+RkZFBSkpKSVeD2tzaWURERETK\np0S7CoJ12kEHDx5k165d1SodAV+nXVhYWGrXyd69/eY1f/ubfxxsKThgwAAWLfIr3aNG+XOPPPII\nK1eu5N1332XgwIHVuygRERERCQsl2lWQlpbG6tWr2bt3L0DJhjPVXdHu168fLVu2ZN68eSXHguUj\n77wDhw75spGmTZvSvXt30tPhnHMguAfO0KFDSU1NpaioiEFqMyIiIiJSpyjRroK0tDScc2RkZABH\nN6up7op2TEwMV111FXPmzCnVzeS662DPHl+PnZmZSf/+/YmJiWH+fF82EiwNMTMee+wxGjZsyODB\ng0/u4kRERESkRinRroJu3brRokULJk2axPz580s6kFR3RRvg2muvZdOmTXz++eclx847D3r29N1H\ngjdCfvklrFt3tGwk6NJLL2X37t0nFYOIiIiI1Dwl2lUQExPDU089xdq1a7nsssu46aabaNSoEaef\n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\n",
+      "text/plain": [
+       "<matplotlib.figure.Figure at 0x24cae6ca0f0>"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "### Plot everything - the original series as well as predictions on training and testing sets\n",
+    "import matplotlib.pyplot as plt\n",
+    "%matplotlib inline\n",
+    "\n",
+    "# plot original series\n",
+    "plt.plot(dataset,color = 'k')\n",
+    "\n",
+    "# plot training set prediction\n",
+    "split_pt = train_test_split + window_size \n",
+    "plt.plot(np.arange(window_size,split_pt,1),train_predict,color = 'b')\n",
+    "\n",
+    "# plot testing set prediction\n",
+    "plt.plot(np.arange(split_pt,split_pt + len(test_predict),1),test_predict,color = 'r')\n",
+    "\n",
+    "# pretty up graph\n",
+    "plt.xlabel('day')\n",
+    "plt.ylabel('(normalized) price of Apple stock')\n",
+    "plt.legend(['original series','training fit','testing fit'],loc='center left', bbox_to_anchor=(1, 0.5))\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**Note:** you can try out any time series for this exercise!  If you would like to try another see e.g., [this site containing thousands of time series](https://datamarket.com/data/list/?q=provider%3Atsdl) and pick another one!"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Problem 2: Create a sequence generator"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2.1  Getting started\n",
+    "\n",
+    "In this project you will implement a popular Recurrent Neural Network (RNN) architecture to create an English language sequence generator capable of building semi-coherent English sentences from scratch by building them up character-by-character.  This will require a substantial amount amount of parameter tuning on a large training corpus (at least 100,000 characters long).  In particular for this project we will be using a complete version of Sir Arthur Conan Doyle's classic book The Adventures of Sherlock Holmes.\n",
+    "\n",
+    "How can we train a machine learning model to generate text automatically, character-by-character?  *By showing the model many training examples so it can learn a pattern between input and output.*  With this type of text generation each input is a string of valid characters like this one\n",
+    "\n",
+    "*dogs are grea*\n",
+    "\n",
+    "whlie the corresponding output is the next character in the sentence - which here is 't' (since the complete sentence is 'dogs are great').  We need to show a model many such examples in order for it to make reasonable predictions.\n",
+    "\n",
+    "**Fun note:** For those interested in how text generation is being used check out some of the following fun resources:\n",
+    "\n",
+    "- [Generate wacky sentences](http://www.cs.toronto.edu/~ilya/rnn.html) with this academic RNN text generator\n",
+    "\n",
+    "- Various twitter bots that tweet automatically generated text like[this one](http://tweet-generator-alex.herokuapp.com/).\n",
+    "\n",
+    "- the [NanoGenMo](https://github.com/NaNoGenMo/2016) annual contest to automatically produce a 50,000+ novel automatically\n",
+    "\n",
+    "- [Robot Shakespeare](https://github.com/genekogan/RobotShakespeare) a text generator that automatically produces Shakespear-esk sentences"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2.2  Preprocessing a text dataset\n",
+    "\n",
+    "Our first task is to get a large text corpus for use in training, and on it we perform a several light pre-processing tasks.  The default corpus we will use is the classic book Sherlock Holmes, but you can use a variety of others as well - so long as they are fairly large (around 100,000 characters or more).  "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "our original text has 581881 characters\n"
+     ]
+    }
+   ],
+   "source": [
+    "# read in the text, transforming everything to lower case\n",
+    "text = open('datasets/holmes.txt').read().lower()\n",
+    "print('our original text has ' + str(len(text)) + ' characters')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Next, lets examine a bit of the raw text.  Because we are interested in creating sentences of English words automatically by building up each word character-by-character, we only want to train on valid English words.  In other words - we need to remove all of the other junk characters that aren't words!"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "\"ï»¿project gutenberg's the adventures of sherlock holmes, by arthur conan doyle\\n\\nthis ebook is for the use of anyone anywhere at no cost and with\\nalmost no restrictions whatsoever.  you may copy it, give it away or\\nre-use it under the terms of the project gutenberg license included\\nwith this ebook or online at www.gutenberg.net\\n\\n\\ntitle: the adventures of sherlock holmes\\n\\nauthor: arthur conan doyle\\n\\nposting date: april 18, 2011 [ebook #1661]\\nfirst posted: november 29, 2002\\n\\nlanguage: english\\n\\n\\n*** start of this project gutenberg ebook the adventures of sherlock holmes ***\\n\\n\\n\\n\\nproduced by an anonymous project gutenberg volunteer and jose menendez\\n\\n\\n\\n\\n\\n\\n\\n\\n\\nthe adventures of sherlock holmes\\n\\nby\\n\\nsir arthur conan doyle\\n\\n\\n\\n   i. a scandal in bohemia\\n  ii. the red-headed league\\n iii. a case of identity\\n  iv. the boscombe valley mystery\\n   v. the five orange pips\\n  vi. the man with the twisted lip\\n vii. the adventure of the blue carbuncle\\nviii. the adventure of the speckled band\\n  ix. the adventure of the engineer's thumb\\n   x. the adventure of the noble bachelor\\n  xi. the adventure of the beryl coronet\\n xii. the adventure of the copper beeches\\n\\n\\n\\n\\nadventure i. a scandal in bohemia\\n\\ni.\\n\\nto sherlock holmes she is always the woman. i have seldom heard\\nhim mention her under any other name. in his eyes she eclipses\\nand predominates the whole of her sex. it was not that he felt\\nany emotion akin to love for irene adler. all emotions, and that\\none particularly, were abhorrent to his cold, precise but\\nadmirably balanced mind. he was, i take it, the most perfect\\nreasoning and observing machine that the world has seen, but as a\\nlover he would have placed himself in a false position. he never\\nspoke of the softer passions, save with a gibe and a sneer. they\\nwere admirable things for the observer--excellent for drawing the\\nveil from men's motives and actions. but for the trained reasoner\\nto admit such intrusions into his own delicate and finely\\nadjusted temperament was to introduce a di\""
+      ]
+     },
+     "execution_count": 14,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "### print out the first 1000 characters of the raw text to get a sense of what we need to throw out\n",
+    "text[:2000]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Wow - there's a lot of junk here (i.e., weird uncommon character combinations - as this first character chunk contains the title and author page, as well as table of contents)!  e.g., all the carriage return and newline sequences '\\n' and '\\r' sequences.  We want to train our RNN on a large chunk of real english sentences - we don't want it to start thinking non-english words or strange characters are valid! - so lets clean up the data a bit.\n",
+    "\n",
+    "First, since the dataset is so large and the first few hundred characters contain a lot of junk, lets cut it out.  Lets also find-and-replace those newline tags with empty spaces."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [],
+   "source": [
+    "### find and replace '\\n' and '\\r' symbols - replacing them \n",
+    "text = text[1302:]\n",
+    "text = text.replace('\\n',' ')    # replacing '\\n' with '' simply removes the sequence\n",
+    "text = text.replace('\\r',' ')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Lets see how the first 1000 characters of our text looks now!"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "\" his eyes she eclipses and predominates the whole of her sex. it was not that he felt any emotion akin to love for irene adler. all emotions, and that one particularly, were abhorrent to his cold, precise but admirably balanced mind. he was, i take it, the most perfect reasoning and observing machine that the world has seen, but as a lover he would have placed himself in a false position. he never spoke of the softer passions, save with a gibe and a sneer. they were admirable things for the observer--excellent for drawing the veil from men's motives and actions. but for the trained reasoner to admit such intrusions into his own delicate and finely adjusted temperament was to introduce a distracting factor which might throw a doubt upon all his mental results. grit in a sensitive instrument, or a crack in one of his own high-power lenses, would not be more disturbing than a strong emotion in a nature such as his. and yet there was but one woman to him, and that woman was the late irene \""
+      ]
+     },
+     "execution_count": 16,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "### print out the first 1000 characters of the raw text to get a sense of what we need to throw out\n",
+    "text[:1000]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "<a id='TODO_3'></a>\n",
+    "\n",
+    "#### TODO: finish cleaning the text\n",
+    "\n",
+    "Lets make sure we haven't left any other non-English/proper punctuation (commas, periods, etc., are ok) characters lurking around in the depths of the text.  You can do this by ennumerating all the text's unique characters, examining them, and then replacing any unwanted (non-english) characters with empty spaces!  Once we find all of the text's unique characters, we can remove all of the non-English/proper punctuation ones in the next cell.  Note: don't remove necessary punctuation marks!  (given in the cell below).  \n",
+    "\n",
+    "(remember to copy your completed function into the script *my_answers.py* function titled *clean_text* before submitting your project)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "unique_chars before cleaning: [' ', '!', '\"', '$', '%', '&', \"'\", '(', ')', '*', ',', '-', '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '?', '@', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '\\xa0', '¢', '¨', '©', 'ã']\n"
+     ]
+    }
+   ],
+   "source": [
+    "### TODO: list all unique characters in the text and remove any non-english ones\n",
+    "# find all unique characters in the text\n",
+    "# set gets only list of unique character in text\n",
+    "unique_chars = sorted(list(set(text)))\n",
+    "print(\"unique_chars before cleaning:\",unique_chars)\n",
+    "\n",
+    "# remove as many non-english characters and character sequences as you can \n",
+    "import re\n",
+    "#we removed all non-english charaters using regex\n",
+    "text = re.sub(r'[^a-zA-Z\\,\\.\\1\\;\\:\\?\\s\\']' , '', text)\n",
+    "\n",
+    "# \\Xa0 is non-breaking space in Latin1 (ISO 8859-1), also chr(160). So replace it with a space.\n",
+    "text = text.replace('\\xa0', '')\n",
+    "    \n",
+    "# shorten any extra dead space created above\n",
+    "text = text.replace('  ',' ')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "With your chosen characters removed print out the first few hundred lines again just to double check that everything looks good."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "\" his eyes she eclipses and predominates the whole of her sex. it was not that he felt any emotion akin to love for irene adler. all emotions, and that one particularly, were abhorrent to his cold, precise but admirably balanced mind. he was, i take it, the most perfect reasoning and observing machine that the world has seen, but as a lover he would have placed himself in a false position. he never spoke of the softer passions, save with a gibe and a sneer. they were admirable things for the observerexcellent for drawing the veil from men's motives and actions. but for the trained reasoner to admit such intrusions into his own delicate and finely adjusted temperament was to introduce a distracting factor which might throw a doubt upon all his mental results. grit in a sensitive instrument, or a crack in one of his own highpower lenses, would not be more disturbing than a strong emotion in a nature such as his. and yet there was but one woman to him, and that woman was the late irene adler, of dubious and questionable memory. i had seen little of holmes lately. my marriage had drifted us away from each other. my own complete happiness, and the homecentred interests which rise up around the man who first finds himself master of his own establishment, were sufficient to absorb all my attention, while holmes, who loathed every form of society with his whole bohemian soul, remained in our lodgings in baker street, buried among his old books, and alternating from week to week between cocaine and ambition, the drowsiness of the drug, and the fierce energy of his own keen nature. he was still, as ever, deeply attracted by the study of crime, and occupied his immense faculties and extraordinary powers of observation in following out those clues, and clearing up those mysteries which had been abandoned as hopeless by the official police. from time to time i heard some vague account of his doings: of his summons to odessa in the case of the trepoff murder, of his clearing up of\""
+      ]
+     },
+     "execution_count": 18,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "### print out the first 2000 characters of the raw text to get a sense of what we need to throw out\n",
+    "text[:2000]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Now that we have thrown out a good number of non-English characters/character sequences lets print out some statistics about the dataset - including number of total characters and number of unique characters."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "this corpus has 570329 total number of characters\n",
+      "this corpus has 33 unique characters\n"
+     ]
+    }
+   ],
+   "source": [
+    "# count the number of unique characters in the text\n",
+    "chars = sorted(list(set(text)))\n",
+    "\n",
+    "# print some of the text, as well as statistics\n",
+    "print (\"this corpus has \" +  str(len(text)) + \" total number of characters\")\n",
+    "print (\"this corpus has \" +  str(len(chars)) + \" unique characters\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2.3  Cutting data into input/output pairs\n",
+    "\n",
+    "Now that we have our text all cleaned up, how can we use it to train a model to generate sentences automatically?  First we need to train a machine learning model - and in order to do that we need a set of input/output pairs for a model to train on.  How can we create a set of input/output pairs from our text to train on?\n",
+    "\n",
+    "Remember in part 1 of this notebook how we used a sliding window to extract input/output pairs from a time series?  We do the same thing here!  We slide a window of length $T$ along our giant text corpus - everything in the window becomes one input while the character following becomes its corresponding output.  This process of extracting input/output pairs is illustrated in the gif below on a small example text using a window size of T = 5.\n",
+    "\n",
+    "<img src=\"images/text_windowing_training.gif\" width=400 height=400/>\n",
+    "\n",
+    "Notice one aspect of the sliding window in this gif that does not mirror the analaogous gif for time series shown in part 1 of the notebook - we do not need to slide the window along one character at a time but can move by a fixed step size $M$ greater than 1 (in the gif indeed $M = 1$).  This is done with large input texts (like ours which has over 500,000 characters!) when sliding the window along one character at a time we would create far too many input/output pairs to be able to reasonably compute with.\n",
+    "\n",
+    "More formally lets denote our text corpus - which is one long string of characters - as follows\n",
+    "\n",
+    "$$s_{0},s_{1},s_{2},...,s_{P}$$\n",
+    "\n",
+    "where $P$ is the length of the text (again for our text $P \\approx 500,000!$).  Sliding a window of size T = 5 with a step length of M = 1 (these are the parameters shown in the gif above) over this sequence produces the following list of input/output pairs\n",
+    "\n",
+    "\n",
+    "$$\\begin{array}{c|c}\n",
+    "\\text{Input} & \\text{Output}\\\\\n",
+    "\\hline \\color{CornflowerBlue} {\\langle s_{1},s_{2},s_{3},s_{4},s_{5}\\rangle} & \\color{Goldenrod}{ s_{6}} \\\\\n",
+    "\\ \\color{CornflowerBlue} {\\langle s_{2},s_{3},s_{4},s_{5},s_{6} \\rangle } & \\color{Goldenrod} {s_{7} } \\\\\n",
+    "\\color{CornflowerBlue}  {\\vdots} & \\color{Goldenrod} {\\vdots}\\\\\n",
+    "\\color{CornflowerBlue} { \\langle s_{P-5},s_{P-4},s_{P-3},s_{P-2},s_{P-1} \\rangle } & \\color{Goldenrod} {s_{P}}\n",
+    "\\end{array}$$\n",
+    "\n",
+    "Notice here that each input is a sequence (or vector) of 4 characters (and in general has length equal to the window size T) while each corresponding output is a single character.  We created around P total number of input/output pairs  (for general step size M we create around ceil(P/M) pairs)."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "<a id='TODO_4'></a>\n",
+    "\n",
+    "Now its time for you to window the input time series as described above! \n",
+    "\n",
+    "**TODO:** Create a function that runs a sliding window along the input text and creates associated input/output pairs.  A skeleton function has been provided for you.  Note that this function should input a) the text  b) the window size and c) the step size, and return the input/output sequences.  Note: the return items should be *lists* - not numpy arrays.\n",
+    "\n",
+    "(remember to copy your completed function into the script *my_answers.py* function titled *window_transform_text* before submitting your project)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "metadata": {
+    "collapsed": true
+   },
+   "outputs": [],
+   "source": [
+    "### TODO: fill out the function below that transforms the input text and window-size into a set of input/output pairs for use with our RNN model\n",
+    "def window_transform_text(text,window_size,step_size):\n",
+    "    # containers for input/output pairs\n",
+    "    inputs = []\n",
+    "    outputs = []\n",
+    "    \n",
+    "    #get last place\n",
+    "    last_place = len(text) - window_size\n",
+    "    for i in range(0, last_place, step_size):\n",
+    "        \n",
+    "        x = i + window_size\n",
+    "        X = text[i : x]\n",
+    "        y = text[x] \n",
+    "\n",
+    "        inputs.append(X)\n",
+    "        outputs.append(y)\n",
+    "    \n",
+    "    return inputs,outputs"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "With our function complete we can now use it to produce input/output pairs!  We employ the function in the next cell, where the window_size = 50 and step_size = 5."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [],
+   "source": [
+    "# run your text window-ing function \n",
+    "window_size = 100\n",
+    "step_size = 5\n",
+    "inputs, outputs = window_transform_text(text,window_size,step_size)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Lets print out a few input/output pairs to verify that we have made the right sort of stuff!"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "input = she eclipses and predominates the whole of her sex. it was not that he felt any emotion akin to love\n",
+      "output =  \n",
+      "--------------\n",
+      "input = rverexcellent for drawing the veil from men's motives and actions. but for the trained reasoner to a\n",
+      "output = d\n"
+     ]
+    }
+   ],
+   "source": [
+    "# print out a few of the input/output pairs to verify that we've made the right kind of stuff to learn from\n",
+    "print('input = ' + inputs[2])\n",
+    "print('output = ' + outputs[2])\n",
+    "print('--------------')\n",
+    "print('input = ' + inputs[100])\n",
+    "print('output = ' + outputs[100])"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Looks good!"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2.4  Wait, what kind of problem is text generation again?\n",
+    "\n",
+    "In part 1 of this notebook we used the same pre-processing technique - the sliding window - to produce a set of training input/output pairs to tackle the problem of time series prediction *by treating the problem as one of regression*.  So what sort of problem do we have here now, with text generation?  Well, the time series prediction was a regression problem because the output (one value of the time series) was a continuous value.  Here - for character-by-character text generation - each output is a *single character*.  This isn't a continuous value - but a distinct class - therefore **character-by-character text generation is a classification problem**.  \n",
+    "\n",
+    "How many classes are there in the data?  Well, the number of classes is equal to the number of unique characters we have to predict!  How many of those were there in our dataset again?  Lets print out the value again."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "this corpus has 33 unique characters\n",
+      "and these characters are \n",
+      "[' ', \"'\", ',', '.', ':', ';', '?', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']\n"
+     ]
+    }
+   ],
+   "source": [
+    "# print out the number of unique characters in the dataset\n",
+    "chars = sorted(list(set(text)))\n",
+    "print (\"this corpus has \" +  str(len(chars)) + \" unique characters\")\n",
+    "print ('and these characters are ')\n",
+    "print (chars)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Rockin' - so we have a multi-class classification problem on our hands!"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2.5  One-hot encoding characters\n",
+    "\n",
+    "There's just one last issue we have to deal with before tackle: machine learning algorithm deal with numerical data and all of our input/output pairs are characters.  So we just need to transform our characters into equivalent numerical values.  The most common way of doing this is via a 'one-hot encoding' scheme.  Here's how it works.\n",
+    "\n",
+    "We transform each character in our inputs/outputs into a vector with length equal to the number of unique characters in our text.  This vector is all zeros except one location where we place a 1 - and this location is unique to each character type.  e.g., we transform 'a', 'b', and 'c' as follows\n",
+    "\n",
+    "$$a\\longleftarrow\\left[\\begin{array}{c}\n",
+    "1\\\\\n",
+    "0\\\\\n",
+    "0\\\\\n",
+    "\\vdots\\\\\n",
+    "0\\\\\n",
+    "0\n",
+    "\\end{array}\\right]\\,\\,\\,\\,\\,\\,\\,b\\longleftarrow\\left[\\begin{array}{c}\n",
+    "0\\\\\n",
+    "1\\\\\n",
+    "0\\\\\n",
+    "\\vdots\\\\\n",
+    "0\\\\\n",
+    "0\n",
+    "\\end{array}\\right]\\,\\,\\,\\,\\,c\\longleftarrow\\left[\\begin{array}{c}\n",
+    "0\\\\\n",
+    "0\\\\\n",
+    "1\\\\\n",
+    "\\vdots\\\\\n",
+    "0\\\\\n",
+    "0 \n",
+    "\\end{array}\\right]\\cdots$$\n",
+    "\n",
+    "where each vector has 32 entries (or in general: number of entries = number of unique characters in text)."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "The first practical step towards doing this one-hot encoding is to form a dictionary mapping each unique character to a unique integer, and one dictionary to do the reverse mapping.  We can then use these dictionaries to quickly make our one-hot encodings, as well as re-translate (from integers to characters) the results of our trained RNN classification model."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "metadata": {
+    "collapsed": true
+   },
+   "outputs": [],
+   "source": [
+    "# this dictionary is a function mapping each unique character to a unique integer\n",
+    "chars_to_indices = dict((c, i) for i, c in enumerate(chars))  # map each unique character to unique integer\n",
+    "\n",
+    "# this dictionary is a function mapping each unique integer back to a unique character\n",
+    "indices_to_chars = dict((i, c) for i, c in enumerate(chars))  # map each unique integer back to unique character"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Now we can transform our input/output pairs - consisting of characters - to equivalent input/output pairs made up of one-hot encoded vectors.  In the next cell we provide a function for doing just this: it takes in the raw character input/outputs and returns their numerical versions.  In particular the numerical input is given as $\\bf{X}$, and numerical output is given as the $\\bf{y}$"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [],
+   "source": [
+    "# transform character-based input/output into equivalent numerical versions\n",
+    "def encode_io_pairs(text,window_size,step_size):\n",
+    "    # number of unique chars\n",
+    "    chars = sorted(list(set(text)))\n",
+    "    num_chars = len(chars)\n",
+    "    \n",
+    "    # cut up text into character input/output pairs\n",
+    "    inputs, outputs = window_transform_text(text,window_size,step_size)\n",
+    "    \n",
+    "    # create empty vessels for one-hot encoded input/output\n",
+    "    X = np.zeros((len(inputs), window_size, num_chars), dtype=np.bool)\n",
+    "    y = np.zeros((len(inputs), num_chars), dtype=np.bool)\n",
+    "    \n",
+    "    # loop over inputs/outputs and tranform and store in X/y\n",
+    "    for i, sentence in enumerate(inputs):\n",
+    "        for t, char in enumerate(sentence):\n",
+    "            X[i, t, chars_to_indices[char]] = 1\n",
+    "        y[i, chars_to_indices[outputs[i]]] = 1\n",
+    "        \n",
+    "    return X,y"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Now run the one-hot encoding function by activating the cell below and transform our input/output pairs!"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [],
+   "source": [
+    "# use your function\n",
+    "window_size = 100\n",
+    "step_size = 5\n",
+    "X,y = encode_io_pairs(text,window_size,step_size)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "<a id='TODO_5'></a>\n",
+    "\n",
+    "## 2.6 Setting up our RNN\n",
+    "\n",
+    "With our dataset loaded and the input/output pairs extracted / transformed we can now begin setting up our RNN for training.  Again we will use Keras to quickly build a single hidden layer RNN - where our hidden layer consists of LTSM modules.\n",
+    "\n",
+    "Time to get to work: build a 3 layer RNN model of the following specification\n",
+    "\n",
+    "- layer 1 should be an LSTM module with 200 hidden units --> note this should have input_shape = (window_size,len(chars)) where len(chars) = number of unique characters in your cleaned text\n",
+    "- layer 2 should be a linear module, fully connected, with len(chars) hidden units --> where len(chars) = number of unique characters in your cleaned text\n",
+    "- layer 3 should be a softmax activation ( since we are solving a *multiclass classification*)\n",
+    "- Use the **categorical_crossentropy** loss \n",
+    "\n",
+    "This network can be constructed using just a few lines - as with the RNN network you made in part 1 of this notebook.  See e.g., the [general Keras documentation](https://keras.io/getting-started/sequential-model-guide/) and the [LTSM documentation in particular](https://keras.io/layers/recurrent/) for examples of how to quickly use Keras to build neural network models."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "_________________________________________________________________\n",
+      "Layer (type)                 Output Shape              Param #   \n",
+      "=================================================================\n",
+      "lstm_2 (LSTM)                (None, 200)               187200    \n",
+      "_________________________________________________________________\n",
+      "dense_2 (Dense)              (None, 33)                6633      \n",
+      "_________________________________________________________________\n",
+      "activation_1 (Activation)    (None, 33)                0         \n",
+      "=================================================================\n",
+      "Total params: 193,833\n",
+      "Trainable params: 193,833\n",
+      "Non-trainable params: 0\n",
+      "_________________________________________________________________\n"
+     ]
+    }
+   ],
+   "source": [
+    "### necessary functions from the keras library\n",
+    "from keras.models import Sequential\n",
+    "from keras.layers import Dense, Activation, LSTM\n",
+    "from keras.optimizers import RMSprop\n",
+    "from keras.utils.data_utils import get_file\n",
+    "import keras\n",
+    "import random\n",
+    "\n",
+    "# TODO build the required RNN model: a single LSTM hidden layer with softmax activation, categorical_crossentropy loss \n",
+    "model = Sequential()\n",
+    "model.add(LSTM(200, input_shape=(window_size,len(chars))))\n",
+    "model.add(Dense(len(chars)))\n",
+    "model.add(Activation('softmax'))\n",
+    "model.summary()\n",
+    "\n",
+    "# initialize optimizer\n",
+    "optimizer = keras.optimizers.RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)\n",
+    "\n",
+    "# compile model --> make sure initialized optimizer and callbacks - as defined above - are used\n",
+    "model.compile(loss='categorical_crossentropy', optimizer=optimizer)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2.7  Training our RNN model for text generation\n",
+    "\n",
+    "With our RNN setup we can now train it!  Lets begin by trying it out on a small subset of the larger version.  In the next cell we take the first 10,000 input/output pairs from our training database to learn on."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [],
+   "source": [
+    "# a small subset of our input/output pairs\n",
+    "Xsmall = X[:10000,:,:]\n",
+    "ysmall = y[:10000,:]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Now lets fit our model!"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Epoch 1/40\n",
+      "10000/10000 [==============================] - 24s - loss: 3.0151    \n",
+      "Epoch 2/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.8914    \n",
+      "Epoch 3/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.8704    \n",
+      "Epoch 4/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.8346    \n",
+      "Epoch 5/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.7907    \n",
+      "Epoch 6/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.7143    \n",
+      "Epoch 7/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.6469    \n",
+      "Epoch 8/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.5748    \n",
+      "Epoch 9/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.5179    \n",
+      "Epoch 10/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.4709    \n",
+      "Epoch 11/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.4239    \n",
+      "Epoch 12/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.3935    \n",
+      "Epoch 13/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.3586    \n",
+      "Epoch 14/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.3230    \n",
+      "Epoch 15/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.2976    \n",
+      "Epoch 16/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.2751    \n",
+      "Epoch 17/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.2517    \n",
+      "Epoch 18/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.2321    \n",
+      "Epoch 19/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.2106    \n",
+      "Epoch 20/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.1871    \n",
+      "Epoch 21/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.1741    \n",
+      "Epoch 22/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.1526    \n",
+      "Epoch 23/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.1380    \n",
+      "Epoch 24/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.1167    \n",
+      "Epoch 25/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.1008    \n",
+      "Epoch 26/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.0876    \n",
+      "Epoch 27/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.0641    \n",
+      "Epoch 28/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.0511    \n",
+      "Epoch 29/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.0318    \n",
+      "Epoch 30/40\n",
+      "10000/10000 [==============================] - 22s - loss: 2.0125    \n",
+      "Epoch 31/40\n",
+      "10000/10000 [==============================] - 22s - loss: 1.9986    \n",
+      "Epoch 32/40\n",
+      "10000/10000 [==============================] - 22s - loss: 1.9811    \n",
+      "Epoch 33/40\n",
+      "10000/10000 [==============================] - 22s - loss: 1.9568    \n",
+      "Epoch 34/40\n",
+      "10000/10000 [==============================] - 22s - loss: 1.9449    \n",
+      "Epoch 35/40\n",
+      "10000/10000 [==============================] - 22s - loss: 1.9207    \n",
+      "Epoch 36/40\n",
+      "10000/10000 [==============================] - 22s - loss: 1.9031    \n",
+      "Epoch 37/40\n",
+      "10000/10000 [==============================] - 22s - loss: 1.8767    \n",
+      "Epoch 38/40\n",
+      "10000/10000 [==============================] - 22s - loss: 1.8580    \n",
+      "Epoch 39/40\n",
+      "10000/10000 [==============================] - 22s - loss: 1.8375    \n",
+      "Epoch 40/40\n",
+      "10000/10000 [==============================] - 22s - loss: 1.8135    \n"
+     ]
+    }
+   ],
+   "source": [
+    "# train the model\n",
+    "model.fit(Xsmall, ysmall, batch_size=500, epochs=40,verbose = 1)\n",
+    "\n",
+    "# save weights\n",
+    "model.save_weights('model_weights/best_RNN_small_textdata_weights.hdf5')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "How do we make a given number of predictions (characters) based on this fitted model?   \n",
+    "\n",
+    "First we predict the next character after following any chunk of characters in the text of length equal to our chosen window size.  Then we remove the first character in our input sequence and tack our prediction onto the end.  This gives us a slightly changed sequence of inputs that still has length equal to the size of our window.  We then feed in this updated input sequence into the model to predict the another character.  Together then we have two predicted characters following our original input sequence.  Repeating this process N times gives us N predicted characters.\n",
+    "\n",
+    "In the next Python cell we provide you with a completed function that does just this - it makes predictions when given a) a trained RNN model, b) a subset of (window_size) characters from the text, and c) a number of characters to predict (to follow our input subset)."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "metadata": {
+    "collapsed": true
+   },
+   "outputs": [],
+   "source": [
+    "# function that uses trained model to predict a desired number of future characters\n",
+    "def predict_next_chars(model,input_chars,num_to_predict):     \n",
+    "    # create output\n",
+    "    predicted_chars = ''\n",
+    "    for i in range(num_to_predict):\n",
+    "        # convert this round's predicted characters to numerical input    \n",
+    "        x_test = np.zeros((1, window_size, len(chars)))\n",
+    "        for t, char in enumerate(input_chars):\n",
+    "            x_test[0, t, chars_to_indices[char]] = 1.\n",
+    "\n",
+    "        # make this round's prediction\n",
+    "        test_predict = model.predict(x_test,verbose = 0)[0]\n",
+    "\n",
+    "        # translate numerical prediction back to characters\n",
+    "        r = np.argmax(test_predict)                           # predict class of each test input\n",
+    "        d = indices_to_chars[r] \n",
+    "\n",
+    "        # update predicted_chars and input\n",
+    "        predicted_chars+=d\n",
+    "        input_chars+=d\n",
+    "        input_chars = input_chars[1:]\n",
+    "    return predicted_chars"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "<a id='TODO_6'></a>\n",
+    "\n",
+    "With your trained model try a few subsets of the complete text as input - note the length of each must be exactly equal to the window size.  For each subset us the function above to predict the next 100 characters that follow each input."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "metadata": {
+    "collapsed": false,
+    "scrolled": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "------------------\n",
+      "input chars = \n",
+      "in to love for irene adler. all emotions, and that one particularly, were abhorrent to his cold, pre\"\n",
+      "\n",
+      "predicted chars = \n",
+      "n the sand whan the stound whin the stound of the sout the store has in the singe and of the stoug h\"\n",
+      "\n",
+      "------------------\n",
+      "input chars = \n",
+      "or a crack in one of his own highpower lenses, would not be more disturbing than a strong emotion in\"\n",
+      "\n",
+      "predicted chars = \n",
+      " the rate and of the soust in the stout and whin the stound and whin the stound whin the stound of t\"\n",
+      "\n",
+      "------------------\n",
+      "input chars = \n",
+      " the singular tragedy of the atkinson brothers at trincomalee, and finally of the mission which he h\"\n",
+      "\n",
+      "predicted chars = \n",
+      "are and and of the stoug had whach a dout the fore the rowe har in whace been the sous and whin the \"\n",
+      "\n",
+      "------------------\n",
+      "input chars = \n",
+      "arly malignant bootslitting specimen of the london slavey. as to your practice, if a gentleman walks\"\n",
+      "\n",
+      "predicted chars = \n",
+      " of the soust in the sing of the stour. i was were to the sould and whin the stoug has in the sade t\"\n",
+      "\n",
+      "------------------\n",
+      "input chars = \n",
+      " this room. frequently. how often? well, some hundreds of times. then how many are there? how many? \"\n",
+      "\n",
+      "predicted chars = \n",
+      "whin the saderes in the stout the wat the was of arde to the wathe was was in the mastere the rowe h\"\n",
+      "\n",
+      "------------------\n",
+      "input chars = \n",
+      "oubt; or his monogram, rather. not at all. the 'g' with the small 't' stands for 'gesellschaft,' whi\"\n",
+      "\n",
+      "predicted chars = \n",
+      "ch he sere sour hour and whin the stere was of to the kerting and whin the seane whin the stoug has \"\n",
+      "\n",
+      "------------------\n",
+      "input chars = \n",
+      "refore, to discover what is wanted by this german who writes upon bohemian paper and prefers wearing\"\n",
+      "\n",
+      "predicted chars = \n",
+      " the store and and of the sout the wat the has and and and of the sat the wat the four has andersed \"\n",
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "# TODO: choose an input sequence and use the prediction function in the previous Python cell to predict 100 characters following it\n",
+    "# get an appropriately sized chunk of characters from the text\n",
+    "start_inds = [100, 800, 2000, 5000, 6000, 8000, 9000]\n",
+    "\n",
+    "# load in weights\n",
+    "model.load_weights('model_weights/best_RNN_small_textdata_weights.hdf5')\n",
+    "for s in start_inds:\n",
+    "    start_index = s\n",
+    "    input_chars = text[start_index: start_index + window_size]\n",
+    "\n",
+    "    # use the prediction function\n",
+    "    predict_input = predict_next_chars(model,input_chars,num_to_predict = 100)\n",
+    "\n",
+    "    # print out input characters\n",
+    "    print('------------------')\n",
+    "    input_line = 'input chars = ' + '\\n' +  input_chars + '\"' + '\\n'\n",
+    "    print(input_line)\n",
+    "\n",
+    "    # print out predicted characters\n",
+    "    line = 'predicted chars = ' + '\\n' +  predict_input + '\"' + '\\n'\n",
+    "    print(line)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "This looks ok, but not great.  Now lets try the same experiment with a larger chunk of the data - with the first 100,000 input/output pairs.  \n",
+    "\n",
+    "Tuning RNNs for a typical character dataset like the one we will use here is a computationally intensive endeavour and thus timely on a typical CPU.  Using a reasonably sized cloud-based GPU can speed up training by a factor of 10.  Also because of the long training time it is highly recommended that you carefully write the output of each step of your process to file.  This is so that all of your results are saved even if you close the web browser you're working out of, as the processes will continue processing in the background but variables/output in the notebook system will not update when you open it again.\n",
+    "\n",
+    "In the next cell we show you how to create a text file in Python and record data to it.  This sort of setup can be used to record your final predictions."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 32,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "'this is only a test \\nthe value of x is 2\\n'"
+      ]
+     },
+     "execution_count": 32,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "### A simple way to write output to file\n",
+    "f = open('my_test_output.txt', 'w')              # create an output file to write too\n",
+    "f.write('this is only a test ' + '\\n')           # print some output text\n",
+    "x = 2\n",
+    "f.write('the value of x is ' + str(x) + '\\n')    # record a variable value\n",
+    "f.close()     \n",
+    "\n",
+    "# print out the contents of my_test_output.txt\n",
+    "f = open('my_test_output.txt', 'r')              # create an output file to write too\n",
+    "f.read()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "With this recording devices we can now more safely perform experiments on larger portions of the text.  In the next cell we will use the first 100,000 input/output pairs to train our RNN model."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "First we fit our model to the dataset, then generate text using the trained model in precisely the same generation method applied before on the small dataset.\n",
+    "\n",
+    "**Note:** your generated words should be - by and large - more realistic than with the small dataset, but you won't be able to generate perfect English sentences even with this amount of data.  A rule of thumb: your model is working well if you generate sentences that largely contain real English words."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "C:\\Program Files\\Anaconda3\\lib\\site-packages\\keras\\models.py:837: UserWarning: The `nb_epoch` argument in `fit` has been renamed `epochs`.\n",
+      "  warnings.warn('The `nb_epoch` argument in `fit` '\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Epoch 1/30\n",
+      "100000/100000 [==============================] - 225s - loss: 2.0319   \n",
+      "Epoch 2/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.9466   \n",
+      "Epoch 3/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.8849   \n",
+      "Epoch 4/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.8316   \n",
+      "Epoch 5/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.7857   \n",
+      "Epoch 6/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.7442   \n",
+      "Epoch 7/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.7050   \n",
+      "Epoch 8/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.6692   \n",
+      "Epoch 9/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.6344   \n",
+      "Epoch 10/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.6021   \n",
+      "Epoch 11/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.5704   \n",
+      "Epoch 12/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.5403   \n",
+      "Epoch 13/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.5103   \n",
+      "Epoch 14/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.4806   \n",
+      "Epoch 15/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.4531   \n",
+      "Epoch 16/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.4247   \n",
+      "Epoch 17/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.3971   \n",
+      "Epoch 18/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.3694   \n",
+      "Epoch 19/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.3423   \n",
+      "Epoch 20/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.3145   \n",
+      "Epoch 21/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.2873   \n",
+      "Epoch 22/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.2600   \n",
+      "Epoch 23/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.2326   \n",
+      "Epoch 24/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.2048   \n",
+      "Epoch 25/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.1776   \n",
+      "Epoch 26/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.1520   \n",
+      "Epoch 27/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.1254   \n",
+      "Epoch 28/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.0993   \n",
+      "Epoch 29/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.0732   \n",
+      "Epoch 30/30\n",
+      "100000/100000 [==============================] - 226s - loss: 1.0471   \n"
+     ]
+    }
+   ],
+   "source": [
+    "# a small subset of our input/output pairs\n",
+    "Xlarge = X[:100000,:,:]\n",
+    "ylarge = y[:100000,:]\n",
+    "\n",
+    "# TODO: fit to our larger dataset\n",
+    "model.fit(Xlarge, ylarge, batch_size=500, nb_epoch=30,verbose = 1)\n",
+    "\n",
+    "# save weights\n",
+    "model.save_weights('model_weights/best_RNN_large_textdata_weights.hdf5')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 34,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "-------------------\n",
+      "\n",
+      "input chars = \n",
+      "in to love for irene adler. all emotions, and that one particularly, were abhorrent to his cold, pre\"\n",
+      "\n",
+      "predicted chars = \n",
+      "nsing of a marrical prisced, and the face was statted at the little problem the fater which i had de\"\n",
+      "\n",
+      "-------------------\n",
+      "\n",
+      "input chars = \n",
+      "or a crack in one of his own highpower lenses, would not be more disturbing than a strong emotion in\"\n",
+      "\n",
+      "predicted chars = \n",
+      " the dare. is in the pare of the collent so the little and now down to and withou, and i was alle do\"\n",
+      "\n",
+      "-------------------\n",
+      "\n",
+      "input chars = \n",
+      " the singular tragedy of the atkinson brothers at trincomalee, and finally of the mission which he h\"\n",
+      "\n",
+      "predicted chars = \n",
+      "ad not feen into the drobles of the fare with houre gaiss i house that we charr had been sumer in th\"\n",
+      "\n",
+      "-------------------\n",
+      "\n",
+      "input chars = \n",
+      "arly malignant bootslitting specimen of the london slavey. as to your practice, if a gentleman walks\"\n",
+      "\n",
+      "predicted chars = \n",
+      " of a man who was not in the table of the dereal carriage which was the came of the fill was so ence\"\n",
+      "\n",
+      "-------------------\n",
+      "\n",
+      "input chars = \n",
+      " this room. frequently. how often? well, some hundreds of times. then how many are there? how many? \"\n",
+      "\n",
+      "predicted chars = \n",
+      "it is seemed and sadded to be life indow a thought is was stopled at her was heard i had well moth r\"\n",
+      "\n",
+      "-------------------\n",
+      "\n",
+      "input chars = \n",
+      "oubt; or his monogram, rather. not at all. the 'g' with the small 't' stands for 'gesellschaft,' whi\"\n",
+      "\n",
+      "predicted chars = \n",
+      "ch a way and sull of his confouthing and a dilend of the table of the sellow pritings of the head as\"\n",
+      "\n",
+      "-------------------\n",
+      "\n",
+      "input chars = \n",
+      "refore, to discover what is wanted by this german who writes upon bohemian paper and prefers wearing\"\n",
+      "\n",
+      "predicted chars = \n",
+      " to any county for the poor engeral something of the resimants been surned of the man's croint in th\"\n",
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "# TODO: choose an input sequence and use the prediction function in the previous Python cell to predict 100 characters following it\n",
+    "# get an appropriately sized chunk of characters from the text\n",
+    "start_inds = [100, 800, 2000, 5000, 6000, 8000, 9000]\n",
+    "\n",
+    "# save output\n",
+    "f = open('text_gen_output/RNN_large_textdata_output.txt', 'w')  # create an output file to write too\n",
+    "\n",
+    "# load weights\n",
+    "model.load_weights('model_weights/best_RNN_large_textdata_weights.hdf5')\n",
+    "for s in start_inds:\n",
+    "    start_index = s\n",
+    "    input_chars = text[start_index: start_index + window_size]\n",
+    "\n",
+    "    # use the prediction function\n",
+    "    predict_input = predict_next_chars(model,input_chars,num_to_predict = 100)\n",
+    "\n",
+    "    # print out input characters\n",
+    "    line = '-------------------' + '\\n'\n",
+    "    print(line)\n",
+    "    f.write(line)\n",
+    "\n",
+    "    input_line = 'input chars = ' + '\\n' +  input_chars + '\"' + '\\n'\n",
+    "    print(input_line)\n",
+    "    f.write(input_line)\n",
+    "\n",
+    "    # print out predicted characters\n",
+    "    predict_line = 'predicted chars = ' + '\\n' +  predict_input + '\"' + '\\n'\n",
+    "    print(predict_line)\n",
+    "    f.write(predict_line)\n",
+    "f.close()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "collapsed": true
+   },
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "anaconda-cloud": {},
+  "kernelspec": {
+   "display_name": "Python [default]",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.5.2"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 0
+}
